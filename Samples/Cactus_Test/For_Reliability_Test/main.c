@@ -83,6 +83,9 @@ static InputPort port[] = {
 	},
 };
 
+static int sendMessageButtonGpioFd = -1;
+static int buttonPollTimerFd = -1;
+
 static int led1GpioFd = -1;
 static int led2GpioFd = -1;
 
@@ -90,9 +93,15 @@ static int led2GpioFd = -1;
 static int epollFd = -1;
 static int timerFd = -1;
 
-static int chechStatsFlag = 0;
+static int telnetStatusFlag = 0;
+static int ButtonStatusFlag = 0;
+
+static GPIO_Value_Type sendMessageButtonState = GPIO_Value_High;
 
 static void ContactPollTimerEventHandler(EventData* eventData);
+static void ButtonPollTimerEventHandler(EventData *eventData);
+static bool IsButtonPressed(int fd, GPIO_Value_Type *oldState);
+static void SendMessageButtonHandler(void);
 
 static bool isNetworkStackReady = false;
 EchoServer_ServerState *serverState = NULL;
@@ -199,8 +208,8 @@ static int CheckNetworkStatus(void)
 
         // Print the interface's name.
         char printName[IF_NAMESIZE + 1];
-        memcpy(printName, interfaces[i].interfaceName, interfaces[i].interfaceNameLength);
-        printName[interfaces[i].interfaceNameLength] = '\0';
+        memcpy(printName, interfaces[i].interfaceName, strlen(interfaces[i].interfaceName));
+        printName[strlen(interfaces[i].interfaceName)] = '\0';
         Log_Debug("INFO:   interfaceName=\"%s\"\n", interfaces[i].interfaceName);
 
         // Print whether the interface is enabled.
@@ -395,15 +404,15 @@ static void TimerEventHandler(EventData *eventData)
     }
 
     // Check whether the network stack is ready.
-    if (!isNetworkStackReady && chechStatsFlag != 1) {
+    if (!isNetworkStackReady && telnetStatusFlag != 1) {
         if (CheckNetworkStackStatusAndLaunchServers() != 0) {
             terminationRequired = true;
         }
     }
 
     if(serverState->clientFd != -1) {
-        if (chechStatsFlag != 1) {
-            chechStatsFlag = 1;
+        if (telnetStatusFlag != 1) {
+            telnetStatusFlag = 1;
         }
         for(i = 0; i < 4; i++) {
             GPIO_GetValue(port[i].fd, &D_INState[i]);
@@ -418,6 +427,7 @@ static void TimerEventHandler(EventData *eventData)
 
 // event handler data structures. Only the event handler field needs to be populated.
 static EventData timerEventData = {.eventHandler = &TimerEventHandler};
+static EventData buttonPollEventData = {.eventHandler = &ButtonPollTimerEventHandler};
 
 /// <summary>
 ///     Set up SIGTERM termination handler, set up epoll event handling, configure network
@@ -455,6 +465,14 @@ static int InitializeAndLaunchServers(void)
 		}
 	}
 
+    // Open button A GPIO as input
+    Log_Debug("Opening HW_SW2 as input\n");
+    sendMessageButtonGpioFd = GPIO_OpenAsInput(HW_SW2);
+    if (sendMessageButtonGpioFd < 0) {
+        Log_Debug("ERROR: Could not open button A: %s (%d).\n", strerror(errno), errno);
+        return -1;
+    }
+
 	// LED1
 	Log_Debug("Opening HW_LED1 as output\n");
 	led1GpioFd =
@@ -481,6 +499,14 @@ static int InitializeAndLaunchServers(void)
         return -1;
     }
 
+     // Set up a timer to poll for button events.
+    struct timespec buttonPressCheckPeriod = {0, 1000 * 1000};
+    buttonPollTimerFd =
+        CreateTimerFdAndAddToEpoll(epollFd, &buttonPressCheckPeriod, &buttonPollEventData, EPOLLIN);
+    if (buttonPollTimerFd < 0) {
+        return -1;
+    }
+
     return 0;
 }
 
@@ -489,7 +515,7 @@ static int InitializeAndLaunchServers(void)
 /// </summary>
 int main(int argc, char *argv[])
 {
-    const struct timespec interval = {10, 0};
+    const struct timespec interval = {1, 0};
     int ret;
     Log_Debug("INFO: Private Ethernet TCP server application starting.\n");
     if (InitializeAndLaunchServers() != 0) {
@@ -501,6 +527,7 @@ int main(int argc, char *argv[])
         if (WaitForEventAndCallHandler(epollFd) != 0) {
             terminationRequired = true;
         }
+        if (ButtonStatusFlag) {
         printf("Wifi scanning...\n");
         ret = WifiConfig_TriggerScanAndGetScannedNetworkCount();
         if (ret <= 0) {
@@ -511,8 +538,56 @@ int main(int argc, char *argv[])
             printf("Detected %d access points.\n", ret);
         }
     }
+    }
 
     ShutDownServerAndCleanup();
     Log_Debug("INFO: Application exiting.\n");
     return 0;
+}
+
+/// <summary>
+/// Button timer event:  Check the status of buttons A and B
+/// </summary>
+static void ButtonPollTimerEventHandler(EventData *eventData)
+{
+    if (ConsumeTimerFdEvent(buttonPollTimerFd) != 0) {
+        terminationRequired = true;
+        return;
+    }
+    SendMessageButtonHandler();
+}
+
+/// <summary>
+///     Check whether a given button has just been pressed.
+/// </summary>
+/// <param name="fd">The button file descriptor</param>
+/// <param name="oldState">Old state of the button (pressed or released)</param>
+/// <returns>true if pressed, false otherwise</returns>
+static bool IsButtonPressed(int fd, GPIO_Value_Type *oldState)
+{
+    bool isButtonPressed = false;
+    GPIO_Value_Type newState;
+    int result = GPIO_GetValue(fd, &newState);
+    if (result != 0) {
+        Log_Debug("ERROR: Could not read button GPIO: %s (%d).\n", strerror(errno), errno);
+        terminationRequired = true;
+    } else {
+        // Button is pressed if it is low and different than last known state.
+        isButtonPressed = (newState != *oldState) && (newState == GPIO_Value_Low);
+        *oldState = newState;
+    }
+
+    return isButtonPressed;
+}
+
+/// <summary>
+/// Pressing button A will:
+///     Send a 'Button Pressed' event to Azure IoT Central
+/// </summary>
+static void SendMessageButtonHandler(void)
+{
+    if (IsButtonPressed(sendMessageButtonGpioFd, &sendMessageButtonState)) {
+        ButtonStatusFlag = 1 - ButtonStatusFlag;
+        Log_Debug("Button pressed\n");
+    }
 }
