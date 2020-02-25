@@ -8,7 +8,7 @@
         "CMAKE_MAKE_PROGRAM": "/usr/bin/ninja",
         "AZURE_SPHERE_TARGET_HARDWARE_DEFINITION_DIRECTORY": "${workspaceRoot}",
         "AZURE_SPHERE_TARGET_HARDWARE_DEFINITION": "mt3620.json",
-        "AZURE_SPHERE_TARGET_API_SET": "3+Beta1909"
+        "AZURE_SPHERE_TARGET_API_SET": "4+Beta2001"
     },
     "cmake.configureOnOpen": true,
     "C_Cpp.default.configurationProvider": "vector-of-bool.cmake-tools"
