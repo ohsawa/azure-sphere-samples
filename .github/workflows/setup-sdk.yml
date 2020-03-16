@@ -18,7 +18,7 @@ jobs:
       run: |
         wget https://aka.ms/AzureSphereSDKInstall/Linux -O install.sh
         chmod +x install.sh
-        sudo apt-get install -y net-tools curl ninja
+        sudo apt-get install -y net-tools curl ninja-build
         yes Y | sudo ./install.sh
     - name: build
       
