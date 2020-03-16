@@ -34,9 +34,10 @@ jobs:
     - name: run-cmake
       uses: lukka/run-cmake@v0.11
       with:
-        cmakeListsOrSettingsJson: CMakeListsTxtAdvanced
-        cmakeListsTxtPath: '${{ github.workspace }}/Samples/AzureIoT/CMakeSettings.json'
-        useVcpkgToolchainFile: true
+        cmakeListsOrSettingsJson: CMakeSettingsJson
+        cmakeSettingsJsonPath: '${{ github.workspace }}/Samples/AzureIoT/CMakeSettings.json'
+        configurationRegexFilter: '${{ matrix.configuration }}'
+        useVcpkgToolchainFile: false
         buildDirectory: '${{ runner.workspace }}/b//unixmakefiles'
         cmakeAppendedArgs: '-G "Ninja" '
         # Or build multiple configurations out of a CMakeSettings.json file created with Visual Studio.
