@@ -1,0 +1,20 @@
+name: setup-sdk
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+    steps:
+    - uses: actions/checkout@v2
+    - name: download
+      run: |
+        wget https://aka.ms/AzureSphereSDKInstall/Linux -O install.sh
+        chmod +x install.sh
+        apt-get install -y net-tools curl
+        ./install.sh
+    
