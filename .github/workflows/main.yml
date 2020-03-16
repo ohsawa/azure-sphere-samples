@@ -36,7 +36,7 @@ jobs:
       with:
         cmakeListsOrSettingsJson: CMakeSettingsJson
         cmakeSettingsJsonPath: '${{ github.workspace }}/Samples/AzureIoT/CMakeSettings.json'
-        configurationRegexFilter: '${{ matrix.configuration }}'
+        configurationRegexFilter: 'ARM-Release'
         useVcpkgToolchainFile: false
         buildDirectory: '${{ runner.workspace }}/b//unixmakefiles'
         cmakeAppendedArgs: '-G "Ninja" '
