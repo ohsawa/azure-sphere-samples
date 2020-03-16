@@ -16,5 +16,5 @@ jobs:
         wget https://aka.ms/AzureSphereSDKInstall/Linux -O install.sh
         chmod +x install.sh
         sudo apt-get install -y net-tools curl
-        yee Y | sudo ./install.sh
+        ye Y | sudo ./install.sh
     
