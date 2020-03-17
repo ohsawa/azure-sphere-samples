@@ -6,22 +6,34 @@ on:
   pull_request:
     branches: [ master ]
 
-env:
-  cmake_dir: build
-
 jobs:
   build:
     runs-on: ubuntu-18.04
     steps:
     - uses: actions/checkout@v2
+    - name: tools
+      run: |
+        pip3 install end
+        python3 --version
+
     - name: download
       run: |
         wget https://aka.ms/AzureSphereSDKInstall/Linux -O install.sh
         chmod +x install.sh
         sudo apt-get install -y net-tools curl ninja-build
         yes Y | sudo ./install.sh
+
+    - name: arm-rt-toolchain
+      run: |
+        wget ${TOOLCHAIN_URL} -O tc.tar.bz2
+        tar xf ${TOOLCHAIN_DIR}.tar.bz2 --strip-components=1
+        echo "PWD:"pwd
+        echo "GITHUB_WORKSPACE:" ${GITHUB_WORKSPACE}
+      env:
+        TOOLCHAIN_DIR: "arm-tool-chain"
+        TOOLCHAIN_URL: "https://developer.arm.com/-/media/Files/downloads/gnu-rm/9-2019q4/gcc-arm-none-eabi-9-2019-q4-major-x86_64-linux.tar.bz2"
+
     - name: build
-      
       run: |
         cd Samples/AzureIoT
         mkdir $CMAKE_DIR
@@ -32,5 +44,14 @@ jobs:
         ninja
         ls
       env:
-        CMAKE_DIR: build 
-            
+        CMAKE_DIR: build
+
+    - name: build_rt
+      run: |
+        cd ${PROJECT}
+        mkdir ${CMAKE_DIR}
+        cd ${CMAKE_DIR}
+      env: PROJECT: "Samples/IntercoreComms/IntercoreComms_RTApp_MT3620_BareMetal"
+
+    env:
+      CMAKE_DIR: build
